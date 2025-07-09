@@ -16,62 +16,47 @@ risk_date = dt.datetime.now(HKT).date()
 
 tickers = list(portofolio.keys()) + list(benchmarks.values())
 end_date = dt.date.today() + dt.timedelta(days=1)   # yfinance end is non-inclusive
-start_date = end_date - dt.timedelta(days=365)      # 1-year back-fill
+start_date = end_date - dt.timedelta(days=750)      # 1-year back-fill
 output_file = Path(data_path)/"prices.csv"
 
-def fetch_close(tkr: str, start_date: dt.date, end_date: dt.date) -> pd.Series:
-    """Fetch closing prices for a single ticker"""
-    try:
-        df = yf.download(
-            tkr,
-            start=start_date,
-            end=end_date,
-            interval="1d",
-            auto_adjust=True,  # Use adjusted prices
-            progress=False,
-            threads=True,      # Enable parallel downloads
-        )
-        
-        if df.empty or "Close" not in df.columns:
-            raise ValueError(f"No data or Close column for {tkr}")
-            
-        s = df["Close"].copy()
-        s.name = tkr  # Set series name to ticker
-        return s
-        
-    except Exception as e:
-        raise ValueError(f"Failed to download {tkr}: {str(e)}")
-
 def main():
-    frames = []
+    # Usage (ensure end_date is defined)
+    end_date = dt.datetime.now()  # Or your specific end date
+
+    frames = pd.DataFrame()
     errors = []
     
     print(f"Fetching data for {len(tickers)} tickers from {start_date} to {end_date}...")
     
     for tkr in tickers:
         try:
-            series = fetch_close(tkr, start_date, end_date)
-            frames.append(series)
-            print(f"✓ {tkr:5} fetched ({series.shape[0]} rows)")
+            df = yf.download(
+                tkr,
+                start=start_date,
+                end=end_date,
+                auto_adjust=False,        # <- raw + adj cols
+                progress=False,
+                threads=False,
+            )
+            if df.empty:
+                raise ValueError("no data")
+
+            # choose Adj Close if present, otherwise Close
+            price_series = df["Adj Close"] if "Adj Close" in df.columns else df["Close"]
+            price_series.name = tkr 
+            frames[tkr] = price_series
+            print(f"✓ {tkr:<8} {price_series.shape[0]} rows")
         except Exception as e:
             errors.append((tkr, str(e)))
-            print(f"✗ {tkr:5} failed: {e}")
-
-    if not frames:
-        print("No data pulled — aborting.")
-        return
-
-    # Combine all series into a DataFrame
-    close_df = pd.concat(frames, axis=1).sort_index()
-    close_df.index.name = "date"
-    
-    # Handle weekends/missing data
-    close_df = close_df.ffill()  # Forward fill missing values
-    
+            print(f"✗ {tkr:<8} {e}")
+        
+    #forward fill
+    frames = frames.sort_index().ffill()
+    frames.index.name = "date"
     # Save to CSV
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    close_df.to_csv(output_file)
-    print(f"\nSaved price matrix {close_df.shape} to {output_file}")
+    frames.to_csv(output_file)
+    print(f"\nSaved price matrix {frames.shape} to {output_file}")
 
     if errors:
         print(f"\n{len(errors)} errors occurred:")
