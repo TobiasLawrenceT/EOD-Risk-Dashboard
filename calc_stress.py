@@ -1,12 +1,3 @@
-"""
-stress_test.py  –  quick-and-clean historical / hypothetical scenario engine
------------------------------------------------------------------------------
-
-• Reads today's positions and latest close from prices.csv
-• Re-values the frozen book under three predefined crisis scenarios
-• Outputs absolute and % P/L to an Excel sheet "Stress"
-"""
-
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -14,16 +5,11 @@ import datetime as dt
 import yfinance as yf
 import sys
 
-try:
-    base = Path(__file__).resolve().parents[0]
-except NameError:
-    base = Path.cwd()   # project root
-data = base/"data"
-sys.path.append(str(base))
+data_dir = Path(__file__).resolve().parents[0]/"data"
 
 from setup import portofolio, ticker_currency, scenarios   # single source of truth
 
-px  = pd.read_csv(data/"prices.csv",
+px  = pd.read_csv(data_dir/"prices.csv",
                   index_col="date", parse_dates=True).sort_index()
 prices_today  = px.iloc[-1]
 portfolio_qty = pd.Series(portofolio).astype(float)          # shares / contracts
@@ -59,11 +45,6 @@ for name, shock in scenarios.items():
 
 stress_df = pd.DataFrame(results).set_index("Scenario")
 
-stress_df.to_csv(data/"stress_testing.csv", float_format="%.4f")
+stress_df.to_csv(data_dir/"stress_testing.csv", float_format="%.4f")
 
-# Write to Excel (own workbook or add to risk_dashboard.xlsx)
-out_path = data/"stress_dashboard.xlsx"
-with pd.ExcelWriter(out_path, engine="xlsxwriter") as writer:
-    stress_df.to_excel(writer, sheet_name="Stress", float_format="%.4f")
-
-print("✓ stress_dashboard.xlsx written →", out_path.resolve())
+print("Stress testing results written to stress_testing.CSV")

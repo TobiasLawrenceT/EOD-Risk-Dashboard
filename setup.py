@@ -1,5 +1,8 @@
-HKD_USD = 0.1278
-JPY_USD = 0.0066
+HKD_USD = 0.13
+JPY_USD = 0.0068
+
+data_path = "data"
+
 portofolio = {
     "0700.HK": 100,     # Tencent shares
     "0005.HK": 80,      # HSBC
@@ -35,8 +38,6 @@ beta_map = {
     "MSFT":    "^GSPC",
     "TLT":     "^GSPC"
 }
-
-data_path = "data"
 
 scenarios = {
 

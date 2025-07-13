@@ -5,56 +5,55 @@ import pandas as pd
 import yfinance as yf
 from setup import portofolio, data_path, benchmarks
 
-#Tracking current date and time
 HKT = ZoneInfo("Asia/Hong_Kong")
-now_hk   = dt.datetime.now(HKT)           # aware timestamp
-risk_cut = now_hk.replace(hour=18, minute=0, second=0, microsecond=0)
-if dt.datetime.now(HKT) < risk_cut:
-    print("Too early – markets not closed yet")
-    raise SystemExit
-risk_date = dt.datetime.now(HKT).date()
 
-tickers = list(portofolio.keys()) + list(benchmarks.values())
-end_date = dt.date.today() + dt.timedelta(days=1)   # yfinance end is non-inclusive
-start_date = end_date - dt.timedelta(days=750)      # 1-year back-fill
-output_file = Path(data_path)/"prices.csv"
+def is_market_closed(now):
+    close_bell = now.replace(hour=18, minute=0, second=0, microsecond=0)
+    return now >= close_bell
 
-def main():
-    # Usage (ensure end_date is defined)
-    end_date = dt.datetime.now()  # Or your specific end date
-
+def fetch_price_matrix(tickers, start_date, end_date):
     frames = pd.DataFrame()
     errors = []
     
-    print(f"Fetching data for {len(tickers)} tickers from {start_date} to {end_date}...")
-    
+    print(f"Getting data for {len(tickers)} tickers from {start_date} to {end_date}...")
+
     for tkr in tickers:
         try:
             df = yf.download(
                 tkr,
                 start=start_date,
                 end=end_date,
-                auto_adjust=False,        # <- raw + adj cols
+                auto_adjust=False,
                 progress=False,
                 threads=False,
             )
             if df.empty:
                 raise ValueError("no data")
-
-            # choose Adj Close if present, otherwise Close
             price_series = df["Adj Close"] if "Adj Close" in df.columns else df["Close"]
-            price_series.name = tkr 
             frames[tkr] = price_series
-            print(f"✓ {tkr:<8} {price_series.shape[0]} rows")
+            print(f"Success: {tkr:<8} {price_series.shape[0]} rows")
         except Exception as e:
             errors.append((tkr, str(e)))
-            print(f"✗ {tkr:<8} {e}")
-        
-    #forward fill
+            print(f"Fail: {tkr:<8} {e}")
+    
     frames = frames.sort_index().ffill()
     frames.index.name = "date"
-    # Save to CSV
+    return frames, errors
+
+def main():
+    now_hk = dt.datetime.now(HKT)
+    if not is_market_closed(now_hk):
+        print("Too early – markets not closed yet")
+        raise SystemExit
+
+    tickers = list(portofolio.keys()) + list(benchmarks.values())
+    end_date = now_hk.date() + dt.timedelta(days=1)  # yfinance non-inclusive
+    start_date = end_date - dt.timedelta(days=750)
+
+    output_file = Path(data_path)/"prices.csv"
     output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    frames, errors = fetch_price_matrix(tickers, start_date, end_date)
     frames.to_csv(output_file)
     print(f"\nSaved price matrix {frames.shape} to {output_file}")
 
